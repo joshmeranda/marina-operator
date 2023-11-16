@@ -1,0 +1,47 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: marina-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Terminal is the Schema for the terminals API
+      displayName: Terminal
+      kind: Terminal
+      name: terminals.terminal.marina.io
+      version: v1
+  description: Deployer for marina
+  displayName: marina
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - terminal
+  links:
+  - name: Marina Operator
+    url: https://marina-operator.domain
+  maintainers:
+  - email: joshmeranda@gmail.coim
+    name: josh
+  maturity: alpha
+  provider:
+    name: marina.io
+  version: 0.0.0
