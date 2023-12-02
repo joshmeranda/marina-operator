@@ -32,14 +32,19 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	marinav1 "github.com/joshmeranda/marina-operator/api/v1"
+)
+
+const (
+	DeploymentFinalizer = "marina.io.deployment/finalizer"
+	ServiceFinalizer    = "marina.io.service/finalizer"
 )
 
 func ToPtr[T any](t T) *T {
@@ -49,7 +54,6 @@ func ToPtr[T any](t T) *T {
 // TerminalReconciler reconciles a Terminal object
 type TerminalReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
 }
 
 //+kubebuilder:rbac:groups=terminal.marina.io,resources=terminals,verbs=get;list;watch;create;update;patch;delete
@@ -58,7 +62,7 @@ type TerminalReconciler struct {
 //+kubebuilder:rbac:groups=*,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=*,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 
-func (r *TerminalReconciler) reconcileDeployment(ctx context.Context, terminal marinav1.Terminal) error {
+func (r *TerminalReconciler) reconcileDeployment(ctx context.Context, terminal *marinav1.Terminal) error {
 	logger := log.FromContext(ctx)
 
 	deploymentName := types.NamespacedName{
@@ -76,6 +80,11 @@ func (r *TerminalReconciler) reconcileDeployment(ctx context.Context, terminal m
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ToPtr[int32](1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "marina",
+				},
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      deploymentName.Name,
@@ -107,11 +116,29 @@ func (r *TerminalReconciler) reconcileDeployment(ctx context.Context, terminal m
 		},
 	}
 
+	if terminal.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(terminal, DeploymentFinalizer) {
+			if err := r.Client.Delete(ctx, desiredDeployment); err != nil {
+				return fmt.Errorf("could not delete deployment: %w", err)
+			}
+
+			controllerutil.RemoveFinalizer(terminal, DeploymentFinalizer)
+
+			logger.Info("deleted deployment for terminal",
+				"terminal", terminal.Name,
+			)
+		}
+
+		return nil
+	}
+
 	var foundDeployment appsv1.Deployment
 	if err := r.Get(ctx, deploymentName, &foundDeployment); err != nil && errors.IsNotFound(err) {
 		if err := r.Client.Create(ctx, desiredDeployment); err != nil {
 			return fmt.Errorf("could not create deployment: %w", err)
 		}
+
+		controllerutil.AddFinalizer(terminal, DeploymentFinalizer)
 
 		logger.Info("created deployment for terminal",
 			"terminal", terminal.Name,
@@ -123,7 +150,7 @@ func (r *TerminalReconciler) reconcileDeployment(ctx context.Context, terminal m
 	return nil
 }
 
-func (r *TerminalReconciler) reconcileService(ctx context.Context, terminal marinav1.Terminal) error {
+func (r *TerminalReconciler) reconcileService(ctx context.Context, terminal *marinav1.Terminal) error {
 	logger := log.FromContext(ctx)
 
 	serviceName := types.NamespacedName{
@@ -154,11 +181,29 @@ func (r *TerminalReconciler) reconcileService(ctx context.Context, terminal mari
 		},
 	}
 
+	if terminal.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(terminal, ServiceFinalizer) {
+			if err := r.Client.Delete(ctx, desiredService); err != nil {
+				return fmt.Errorf("could not delete service: %w", err)
+			}
+
+			controllerutil.RemoveFinalizer(terminal, ServiceFinalizer)
+
+			logger.Info("deleted service for terminal",
+				"terminal", terminal.Name,
+			)
+		}
+
+		return nil
+	}
+
 	var foundService corev1.Service
 	if err := r.Get(ctx, serviceName, &foundService); err != nil && errors.IsNotFound(err) {
 		if err := r.Client.Create(ctx, desiredService); err != nil {
 			return fmt.Errorf("could not create service: %w", err)
 		}
+
+		controllerutil.AddFinalizer(terminal, ServiceFinalizer)
 
 		logger.Info("created service for terminal",
 			"terminal", terminal.Name,
@@ -173,9 +218,17 @@ func (r *TerminalReconciler) reconcileService(ctx context.Context, terminal mari
 func (r *TerminalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	var terminal marinav1.Terminal
-	if err := r.Get(ctx, req.NamespacedName, &terminal); err != nil {
-		logger.Error(err, "unable to fetch Terminal")
+	logger.Info("reconciling terminal", "request", req)
+
+	// var terminal *marinav1.Terminal
+	terminal := &marinav1.Terminal{}
+	if err := r.Get(ctx, req.NamespacedName, terminal); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("terminal not found", "terminal", req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+
+		logger.Error(err, "unable to fetch Terminal", "terminal", req.NamespacedName)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -186,6 +239,11 @@ func (r *TerminalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if err := r.reconcileService(ctx, terminal); err != nil {
 		logger.Error(err, "unable to reconcile service")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.Update(ctx, terminal); err != nil {
+		logger.Error(err, "unable to update terminal")
 		return ctrl.Result{}, err
 	}
 

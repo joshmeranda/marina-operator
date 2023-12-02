@@ -91,7 +91,6 @@ func main() {
 
 	if err = (&controllers.TerminalReconciler{
 		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Terminal")
 		os.Exit(1)

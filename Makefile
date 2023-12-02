@@ -293,4 +293,4 @@ $(HELMIFY): $(LOCALBIN)
 	test -s $(LOCALBIN)/helmify || GOBIN=$(LOCALBIN) go install github.com/arttor/helmify/cmd/helmify@latest
     
 helm: manifests kustomize helmify ## Generate helm chart.
-	$(KUSTOMIZE) build config/default | $(HELMIFY) -vv
+	$(KUSTOMIZE) build config/default | $(HELMIFY)
