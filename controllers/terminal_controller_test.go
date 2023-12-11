@@ -6,6 +6,7 @@ import (
 	marinav1 "github.com/joshmeranda/marina-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -42,7 +43,9 @@ var _ = Describe("Terminal Controller", Ordered, func() {
 		}
 
 		err := k8sClient.Create(context.Background(), namespace)
-		Expect(err).NotTo(HaveOccurred())
+		if !errors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
 	})
 
 	When("a terminal is created", func() {
@@ -74,7 +77,6 @@ var _ = Describe("Terminal Controller", Ordered, func() {
 			}, &service)
 			Expect(err).NotTo(HaveOccurred())
 		})
-
 	})
 
 	When("a terminal is deleted", func() {

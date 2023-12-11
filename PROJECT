@@ -20,4 +20,13 @@ resources:
   kind: Terminal
   path: github.com/joshmeranda/marina-operator/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: marina.io
+  group: terminal
+  kind: User
+  path: github.com/joshmeranda/marina-operator/api/v1
+  version: v1
 version: "3"

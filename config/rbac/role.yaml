@@ -20,7 +20,43 @@ rules:
 - apiGroups:
   - '*'
   resources:
+  - serviceaccounts
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - '*'
+  resources:
   - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
   verbs:
   - create
   - delete
@@ -51,6 +87,32 @@ rules:
   - terminal.marina.io
   resources:
   - terminals/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - terminal.marina.io
+  resources:
+  - users
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - terminal.marina.io
+  resources:
+  - users/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - terminal.marina.io
+  resources:
+  - users/status
   verbs:
   - get
   - patch
