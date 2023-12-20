@@ -37,6 +37,8 @@ spec:
             properties:
               foo:
                 type: string
+              password:
+                type: string
               roles:
                 items:
                   type: string

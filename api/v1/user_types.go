@@ -30,8 +30,9 @@ import (
 
 // UserSpec defines the desired state of User
 type UserSpec struct {
-	Name  string   `json:"foo,omitempty"`
-	Roles []string `json:"roles,omitempty"`
+	Name     string   `json:"foo,omitempty"`
+	Password string   `json:"password,omitempty"`
+	Roles    []string `json:"roles,omitempty"`
 }
 
 // UserStatus defines the observed state of User
