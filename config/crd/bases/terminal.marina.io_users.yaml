@@ -38,6 +38,7 @@ spec:
               foo:
                 type: string
               password:
+                format: byte
                 type: string
               roles:
                 items:
