@@ -11,7 +11,7 @@ import (
 type UserSpec struct {
 	Name     string   `json:"name"`
 	Password []byte   `json:"password"`
-	Roles    []string `json:"roles"`
+	Roles    []string `json:"roles,omitempty"`
 }
 
 // UserStatus defines the observed state of User
