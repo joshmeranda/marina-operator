@@ -73,6 +73,8 @@ func (r *UserReconciler) reconcileServiceAccount(ctx context.Context, user *mari
 				logger.Error(err, "could not delete service account", "serviceaccount", client.ObjectKeyFromObject(serviceAccount))
 				return err
 			}
+
+			controllerutil.RemoveFinalizer(user, UserServiceAccountFinalizer)
 		}
 
 		return nil
