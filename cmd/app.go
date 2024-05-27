@@ -14,16 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package cmd
 
 import (
 	"crypto/tls"
-	"flag"
+	"fmt"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -34,8 +36,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	corev1 "github.com/joshmeranda/marina-operator.git/api/v1"
-	"github.com/joshmeranda/marina-operator.git/internal/controller"
+	corev1 "github.com/joshmeranda/marina-operator/api/v1"
+	"github.com/joshmeranda/marina-operator/internal/controller"
+	"github.com/urfave/cli/v2"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -51,27 +54,16 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 }
 
-func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metric endpoint binds to. "+
-		"Use the port :8080. If not set, it will be 0 in order to disable the metrics server")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", false,
-		"If set the metrics endpoint is served securely")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
-		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+func start(ctx *cli.Context) error {
+	metricsAddr := ctx.String("metrics-bind-address")
+	enableLeaderElection := ctx.Bool("enable-leader-elect")
+	probeAddr := ctx.String("health-probe-bind-address")
+	secureMetrics := ctx.Bool("metrics-secure")
+	enableHTTP2 := ctx.Bool("enable-http2")
+
 	opts := zap.Options{
 		Development: true,
 	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -92,10 +84,22 @@ func main() {
 	}
 
 	webhookServer := webhook.NewServer(webhook.Options{
+		Port:    ctx.Int("webhook-port"),
 		TLSOpts: tlsOpts,
 	})
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	var config *rest.Config
+	var err error
+
+	if kubeconfig := ctx.String("kubeconfig"); kubeconfig != "" {
+		if config, err = clientcmd.BuildConfigFromFlags("", kubeconfig); err != nil {
+			return fmt.Errorf("failed to get config from kubeconfig: %w", err)
+		}
+	} else if config, err = rest.InClusterConfig(); err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+
+	mgr, err := ctrl.NewManager(config, ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
 			BindAddress:   metricsAddr,
@@ -149,8 +153,55 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx.Context); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
+	}
+
+	return nil
+}
+
+func App() cli.App {
+	return cli.App{
+		Name:        "manager",
+		Description: "run the marina operator manager",
+		Action:      start,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "kubeconfig",
+				Usage:   "The path to the kubeconfig file. If not set, it will use the in-cluster config.",
+				EnvVars: []string{"KUBECONFIG"},
+			},
+			&cli.StringFlag{
+				Name:  "metrics-bind-address",
+				Usage: "The address the metric endpoint binds to. Use the port :8080. If not set, it will be 0 in order to disable the metrics server",
+				Value: "0",
+			},
+			&cli.BoolFlag{
+				Name:  "enable-leader-election",
+				Usage: "Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.",
+				Value: false,
+			},
+			&cli.StringFlag{
+				Name:  "health-probe-bind-address",
+				Usage: "The address the probe endpoint binds to.",
+				Value: ":8081",
+			},
+			&cli.BoolFlag{
+				Name:  "metrics-secure",
+				Usage: "If set the metrics endpoint is served securely",
+				Value: false,
+			},
+			&cli.BoolFlag{
+				Name:  "enable-http2",
+				Usage: "If set, HTTP/2 will be enabled for the metrics and webhook servers",
+				Value: false,
+			},
+			&cli.IntFlag{
+				Name:  "webhook-port",
+				Usage: "The port the webhook server serves at",
+				Value: 9443,
+			},
+		},
 	}
 }

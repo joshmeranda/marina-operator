@@ -12,7 +12,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	marinacorev1 "github.com/joshmeranda/marina-operator.git/api/v1"
+	marinacorev1 "github.com/joshmeranda/marina-operator/api/v1"
 )
 
 const (

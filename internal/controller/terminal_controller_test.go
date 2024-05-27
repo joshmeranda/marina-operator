@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	marinacorev1 "github.com/joshmeranda/marina-operator.git/api/v1"
+	marinacorev1 "github.com/joshmeranda/marina-operator/api/v1"
 )
 
 var _ = Describe("Terminal Controller", Ordered, func() {
