@@ -2,6 +2,8 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
@@ -18,6 +20,7 @@ import (
 const (
 	UserServiceAccountFinalizer = "marina.io.serviceaccount/finalizer"
 	UserRoleBindingFinalizer    = "marina.io.rolebinding/finalizer"
+	UserSelfRoleFinalizerFormat = "marina.io.selfrole.%s/finalizer"
 )
 
 func serviceAccountForUser(user *marinacorev1.User) *corev1.ServiceAccount {
@@ -25,6 +28,28 @@ func serviceAccountForUser(user *marinacorev1.User) *corev1.ServiceAccount {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      user.Name,
 			Namespace: user.Namespace,
+		},
+	}
+}
+
+func selfRoleForUser(user *marinacorev1.User) *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      user.Name + "-self",
+			Namespace: user.Namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups:     []string{"core.marina.io"},
+				Resources:     []string{"Users"},
+				Verbs:         []string{"get", "list", "watch"},
+				ResourceNames: []string{user.Name},
+			},
+			{
+				APIGroups: []string{"core.marina.io"},
+				Resources: []string{"Terminals"},
+				Verbs:     []string{"get", "list", "watch", "create", "delete"},
+			},
 		},
 	}
 }
@@ -117,12 +142,45 @@ func (r *UserReconciler) reconcileRoleBindings(ctx context.Context, user *marina
 				logger.Error(err, "error creating role binding", "rolebinding", client.ObjectKeyFromObject(binding))
 				return client.IgnoreAlreadyExists(err)
 			}
+			logger.Info("created role binding", "rolebinding", client.ObjectKeyFromObject(binding))
 		}
 	}
 
 	if isDeleting {
 		_ = controllerutil.RemoveFinalizer(user, UserRoleBindingFinalizer)
 	}
+
+	return nil
+}
+
+func (r *UserReconciler) reconcileUserSelfRole(ctx context.Context, user *marinacorev1.User) error {
+	logger := log.FromContext(ctx)
+	selfRole := selfRoleForUser(user)
+
+	finalizerName := fmt.Sprintf(UserSelfRoleFinalizerFormat, strings.ReplaceAll(user.Name, "-", "."))
+
+	if user.GetDeletionTimestamp() != nil {
+		if controllerutil.ContainsFinalizer(user, finalizerName) {
+			if err := r.Delete(ctx, selfRole); err != nil {
+				logger.Error(err, "could not delete self role", "role", client.ObjectKeyFromObject(selfRole))
+				return err
+			}
+
+			controllerutil.RemoveFinalizer(user, finalizerName)
+		}
+
+		return nil
+	}
+
+	_ = controllerutil.AddFinalizer(user, finalizerName)
+
+	if err := r.Create(ctx, selfRole); err != nil {
+		return client.IgnoreAlreadyExists(err)
+	}
+
+	logger.Info("created self role for user", "role", client.ObjectKeyFromObject(selfRole))
+
+	user.Spec.Roles = append(user.Spec.Roles, selfRole.Name)
 
 	return nil
 }
@@ -138,6 +196,11 @@ func (r *UserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 
 	if err := r.reconcileServiceAccount(ctx, user); err != nil {
 		logger.Error(err, "error reconciling service account", "user", req.NamespacedName)
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileUserSelfRole(ctx, user); err != nil {
+		logger.Error(err, "error reconciling self role", "user", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
 

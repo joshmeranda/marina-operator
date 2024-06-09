@@ -2,8 +2,10 @@ package controller
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -30,7 +32,19 @@ var testEnv *envtest.Environment
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Controller Suite")
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+
+	if focusFiles := os.Getenv("FOCUS_FILES"); focusFiles != "" {
+		suiteConfig.FocusFiles = strings.Split(focusFiles, ",")
+	}
+
+	if focusStrings := os.Getenv("FOCUS_STRINGS"); focusStrings != "" {
+		suiteConfig.FocusFiles = strings.Split(focusStrings, ",")
+	}
+
+	fmt.Printf("=== [TestControllers] 000 '%s' ===\n", os.Getenv("KUBEBUILDER_ASSETS"))
+
+	RunSpecs(t, "Controller Suite", suiteConfig, reporterConfig)
 }
 
 var _ = BeforeSuite(func() {

@@ -43,13 +43,13 @@ var _ = Describe("User Controller", func() {
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "SomeRole",
-					Namespace: "marina-system",
+					Namespace: namespace.Name,
 				},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "AnotherRole",
-					Namespace: "marina-system",
+					Namespace: namespace.Name,
 				},
 			},
 		}
@@ -67,7 +67,7 @@ var _ = Describe("User Controller", func() {
 
 		BeforeAll(func() {
 			user = &marinacorev1.User{
-				ObjectMeta: metav1.ObjectMeta{Name: "user-test", Namespace: "marina-system"},
+				ObjectMeta: metav1.ObjectMeta{Name: "user-test", Namespace: namespace.Name},
 				Spec: marinacorev1.UserSpec{
 					Name:     "bilbo",
 					Password: []byte("baggins"),
@@ -110,6 +110,12 @@ var _ = Describe("User Controller", func() {
 			}, &role)
 			Expect(err).NotTo(HaveOccurred())
 
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      user.Name + "-" + "self",
+				Namespace: user.Namespace,
+			}, &role)
+			Expect(err).NotTo(HaveOccurred())
+
 			var roleBinding rbacv1.RoleBinding
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      user.Name + "-" + "SomeRole",
@@ -119,6 +125,12 @@ var _ = Describe("User Controller", func() {
 
 			err = k8sClient.Get(ctx, types.NamespacedName{
 				Name:      user.Name + "-" + "AnotherRole",
+				Namespace: user.Namespace,
+			}, &roleBinding)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      user.Name + "-" + user.Name + "-" + "self",
 				Namespace: user.Namespace,
 			}, &roleBinding)
 			Expect(err).NotTo(HaveOccurred())
@@ -160,6 +172,21 @@ var _ = Describe("User Controller", func() {
 			}, &roleBinding)
 			Expect(err).To(HaveOccurred())
 			Expect(roleBinding).To(BeZero())
+
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      user.Name + "-" + "self",
+				Namespace: user.Namespace,
+			}, &roleBinding)
+			Expect(err).To(HaveOccurred())
+			Expect(roleBinding).To(BeZero())
+
+			var role rbacv1.Role
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      user.Name + "-" + user.Name + "-" + "self",
+				Namespace: user.Namespace,
+			}, &role)
+			Expect(err).To(HaveOccurred())
+			Expect(role).To(BeZero())
 		})
 	})
 })
