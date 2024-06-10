@@ -41,13 +41,13 @@ func selfRoleForUser(user *marinacorev1.User) *rbacv1.Role {
 		Rules: []rbacv1.PolicyRule{
 			{
 				APIGroups:     []string{"core.marina.io"},
-				Resources:     []string{"Users"},
+				Resources:     []string{"users"},
 				Verbs:         []string{"get", "list", "watch"},
 				ResourceNames: []string{user.Name},
 			},
 			{
 				APIGroups: []string{"core.marina.io"},
-				Resources: []string{"Terminals"},
+				Resources: []string{"terminals"},
 				Verbs:     []string{"get", "list", "watch", "create", "delete"},
 			},
 		},
