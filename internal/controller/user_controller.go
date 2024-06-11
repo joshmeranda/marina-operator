@@ -139,7 +139,6 @@ func (r *UserReconciler) reconcileRoleBindings(ctx context.Context, user *marina
 		} else {
 			// assumed roles are validated before we reach this point
 			if err := r.Create(ctx, binding); err != nil {
-				logger.Error(err, "error creating role binding", "rolebinding", client.ObjectKeyFromObject(binding))
 				return client.IgnoreAlreadyExists(err)
 			}
 			logger.Info("created role binding", "rolebinding", client.ObjectKeyFromObject(binding))
